@@ -9,6 +9,8 @@ from contextlib import asynccontextmanager
 from starlette.concurrency import run_in_threadpool
 from embedding_handler import Dino2ExtractorV1, EmbeddingService, URLImageLoader, InternVIT600mbExtractor, \
     Dino3ExtractorV1
+from classifier.config import ClassifierConfig
+from classifier.classifier_service import ClassifierService
 
 from dotenv import load_dotenv
 
@@ -23,10 +25,25 @@ AUTH_TOKEN = os.getenv('TOKEN')
 embedding_service = EmbeddingService(URLImageLoader(), Dino3ExtractorV1())
 # embedding_vit_600m = EmbeddingService(URLImageLoader(), InternVIT600mbExtractor())
 
+# Initialize classifier service
+classifier_config = ClassifierConfig()
+classifier_service = ClassifierService(classifier_config)
+
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    print("[lifespan] Starting service initialization")
+    
+    # Initialize classifier service
+    try:
+        print("[lifespan] Initializing classifier service...")
+        await classifier_service.initialize()
+        print("[lifespan] Classifier service initialized successfully")
+    except Exception as e:
+        print(f"[lifespan] Failed to initialize classifier service: {str(e)}")
+    
+    # IP handler
     print("[lifespan] IP handler starting")
     try:
         ip = requests.get("https://api.ipify.org").text
@@ -46,6 +63,8 @@ async def lifespan(app: FastAPI):
             print(f"Не удалось отправить IP: {response.status_code}, {response.text}")
     except Exception as e:
         print(f"Ошибка при отправке IP: {str(e)}")
+    
+    print("[lifespan] Service initialization complete")
     yield
 
 
@@ -73,6 +92,61 @@ async def extract_embedding(request: EmbeddingRequest):
 @app.get("/")
 async def root():
     return {"message": "embedding service is up and running!"}
+
+
+class ClassifyRequest(BaseModel):
+    url: str
+
+
+@app.post("/classifier/classify")
+async def classify_image(request: ClassifyRequest):
+    """
+    Classify an image into predefined categories.
+    
+    Request body:
+    {
+        "url": "https://example.com/image.jpg"
+    }
+    
+    Response:
+    {
+        "success": true,
+        "category": "building",  // or "painting" or "other"
+        "confidence": 0.87,
+        "error": null
+    }
+    
+    Error response:
+    {
+        "success": false,
+        "category": null,
+        "confidence": null,
+        "error": "Failed to download image: timeout"
+    }
+    """
+    start_time = time.perf_counter()
+    fastapi_logger.info(f"Classification request received for URL: {request.url}")
+    
+    try:
+        # Classify the image
+        result = await classifier_service.classify_image(request.url)
+        
+        elapsed = time.perf_counter() - start_time
+        fastapi_logger.info(f"Classification completed in {elapsed:.2f} seconds")
+        
+        return result.to_dict()
+        
+    except Exception as e:
+        elapsed = time.perf_counter() - start_time
+        error_msg = f"Unexpected error during classification: {str(e)}"
+        fastapi_logger.error(f"{error_msg} (took {elapsed:.2f}s)")
+        
+        return {
+            "success": False,
+            "category": None,
+            "confidence": None,
+            "error": error_msg
+        }
 
 
 

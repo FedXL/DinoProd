@@ -122,3 +122,5 @@ yarn-error.log*
 ##########################
 # Custom rules (add below this line)
 ##########################
+.claude/settings.local.json
+.gitignore
