@@ -70,22 +70,18 @@ class ClassifierService:
         # Compute text embeddings for all prompts
         text_embeddings = self.model.encode_text(all_prompts)
         
-        # Group embeddings by category and compute average
+        # Group embeddings by category (keep individual embeddings, don't average!)
         category_embeddings_lists = defaultdict(list)
         for i, (prompt, category) in enumerate(self.text_prompt_mappings):
             category_embeddings_lists[category].append(text_embeddings[i])
         
-        # Average embeddings per category
+        # Store ALL individual embeddings per category
         for category, embeddings_list in category_embeddings_lists.items():
-            # Stack embeddings and compute mean
+            # Stack embeddings into array but don't average - keep all individual vectors
             stacked = np.stack(embeddings_list)
-            mean_embedding = np.mean(stacked, axis=0)
+            self.category_embeddings[category] = stacked
             
-            # Normalize the averaged embedding
-            normalized = mean_embedding / np.linalg.norm(mean_embedding)
-            self.category_embeddings[category] = normalized
-            
-            logger.info(f"Category '{category}': averaged {len(embeddings_list)} text prompts")
+            logger.info(f"Category '{category}': stored {len(embeddings_list)} individual text prompt embeddings")
         
         elapsed = time.perf_counter() - start_time
         total_categories = len(self.category_embeddings)
@@ -134,13 +130,19 @@ class ClassifierService:
             
             # Compute similarities with all categories
             similarities = {}
-            for category, category_embedding in self.category_embeddings.items():
-                # Reshape embeddings for similarity computation
+            for category, text_embeddings in self.category_embeddings.items():
+                # Compare to ALL embeddings for this category, take MAX
                 img_emb = image_embedding.reshape(1, -1)
-                cat_emb = category_embedding.reshape(1, -1)
                 
-                similarity = self.model.compute_similarity(img_emb, cat_emb)[0]
-                similarities[category] = float(similarity)
+                # Compute similarity to all text prompts for this category
+                category_similarities = []
+                for text_emb in text_embeddings:
+                    text_emb_reshaped = text_emb.reshape(1, -1)
+                    similarity = self.model.compute_similarity(img_emb, text_emb_reshaped)[0]
+                    category_similarities.append(float(similarity))
+                
+                # Take the BEST (maximum) similarity for this category
+                similarities[category] = max(category_similarities)
             
             # Find best match
             best_category = max(similarities, key=similarities.get)
