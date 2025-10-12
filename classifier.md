@@ -144,7 +144,7 @@ Create or update your `.env` file:
 TOKEN=your_artcracker_token
 
 # Classifier settings (optional, defaults shown)
-CLASSIFIER_MODEL=google/siglip-base-patch16-512
+CLASSIFIER_MODEL=google/siglip2-base-patch16-512
 CLASSIFIER_THRESHOLD=0.35
 CATEGORIES_FILE=config/categories.json
 CUDA_AVAILABLE=true
@@ -192,7 +192,7 @@ python3.11 -m uvicorn api:app --host 0.0.0.0 --port 8000
 ```
 [lifespan] Starting service initialization
 [lifespan] Initializing classifier service...
-Loading SigLIP model: google/siglip-base-patch16-512
+Loading SigLIP model: google/siglip2-base-patch16-512
 SigLIP model loaded in 28.45 seconds on cuda
 Computing embeddings for 12 text prompts across 2 categories...
 Category 'building': averaged 5 text prompts
@@ -316,14 +316,15 @@ for threshold in [0.2, 0.3, 0.35, 0.4, 0.5]:
 #### Using Different Models
 
 **Available SigLIP variants:**
-- `google/siglip-base-patch16-512` (default, good balance)
-- `google/siglip-large-patch16-512` (better accuracy, slower)
-- `google/siglip-base-patch16-224` (faster, lower accuracy)
+- check full list https://huggingface.co/blog/siglip2
+- `google/siglip2-base-patch16-512` (default, good balance)
+- `google/siglip2-large-patch16-512` (better accuracy, slower)
+- `google/siglip2-base-patch16-224` (faster, lower accuracy)
 
 **Switching models:**
 ```bash
 # In .env file
-CLASSIFIER_MODEL=google/siglip-large-patch16-512
+CLASSIFIER_MODEL=google/siglip2-large-patch16-512
 ```
 
 ### Performance Optimization

@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class SigLIPModel:
-    def __init__(self, model_name: str = "google/siglip-base-patch16-512", device: str = "cuda"):
+    def __init__(self, model_name: str = "google/siglip2-base-patch16-512", device: str = "cuda"):
         """
         Initialize SigLIP model for zero-shot image classification.
         

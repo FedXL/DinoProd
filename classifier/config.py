@@ -6,7 +6,7 @@ from pathlib import Path
 
 class ClassifierConfig:
     def __init__(self):
-        self.model_name = os.getenv('CLASSIFIER_MODEL', 'google/siglip-base-patch16-512')
+        self.model_name = os.getenv('CLASSIFIER_MODEL', 'google/siglip2-base-patch16-512')
         self.threshold = float(os.getenv('CLASSIFIER_THRESHOLD', '0.35'))
         self.categories_file = os.getenv('CATEGORIES_FILE', 'config/categories.json')
         self.device = "cuda" if os.getenv('CUDA_AVAILABLE', 'true').lower() == 'true' else "cpu"
