@@ -5,7 +5,7 @@ from PIL import Image
 from io import BytesIO
 import logging
 
-logger = logging.getLogger(__name__)
+fastapi_logger = logging.getLogger(__name__)
 
 
 class AsyncImageLoader:
@@ -36,7 +36,7 @@ class AsyncImageLoader:
             if not (url.startswith('http://') or url.startswith('https://')):
                 return None, "URL must start with http:// or https://"
             
-            logger.info(f"Downloading image from: {url}")
+            fastapi_logger.info(f"Downloading image from: {url}")
             
             # Create timeout for the entire download process
             timeout = aiohttp.ClientTimeout(total=self.timeout)
@@ -46,7 +46,7 @@ class AsyncImageLoader:
                     # Check HTTP status
                     if response.status != 200:
                         error_msg = f"HTTP {response.status}: {response.reason}"
-                        logger.error(f"Failed to download image: {error_msg}")
+                        fastapi_logger.error(f"Failed to download image: {error_msg}")
                         return None, f"Failed to download image: {error_msg}"
                     
                     # Check content type
@@ -77,24 +77,24 @@ class AsyncImageLoader:
                         if image.size[0] == 0 or image.size[1] == 0:
                             return None, "Invalid image dimensions"
                         
-                        logger.info(f"Successfully loaded image: {image.size[0]}x{image.size[1]} pixels")
+                        fastapi_logger.info(f"Successfully loaded image: {image.size[0]}x{image.size[1]} pixels")
                         return image, None
                         
                     except Exception as e:
-                        logger.error(f"Failed to process image data: {str(e)}")
+                        fastapi_logger.error(f"Failed to process image data: {str(e)}")
                         return None, f"Failed to process image: {str(e)}"
         
         except asyncio.TimeoutError:
             error_msg = f"Download timeout after {self.timeout} seconds"
-            logger.error(error_msg)
+            fastapi_logger.error(error_msg)
             return None, error_msg
             
         except aiohttp.ClientError as e:
             error_msg = f"Network error: {str(e)}"
-            logger.error(error_msg)
+            fastapi_logger.error(error_msg)
             return None, error_msg
             
         except Exception as e:
             error_msg = f"Unexpected error: {str(e)}"
-            logger.error(error_msg)
+            fastapi_logger.error(error_msg)
             return None, error_msg

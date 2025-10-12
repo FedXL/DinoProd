@@ -6,7 +6,7 @@ from transformers import AutoProcessor, AutoModel
 import logging
 import time
 
-logger = logging.getLogger(__name__)
+fastapi_logger = logging.getLogger(__name__)
 
 
 class SigLIPModel:
@@ -21,7 +21,7 @@ class SigLIPModel:
         self.model_name = model_name
         self.device = device if torch.cuda.is_available() else "cpu"
         
-        logger.info(f"Loading SigLIP model: {model_name}")
+        fastapi_logger.info(f"Loading SigLIP model: {model_name}")
         start_time = time.perf_counter()
         
         # Load processor and model
@@ -33,7 +33,7 @@ class SigLIPModel:
         self.model.eval()
         
         load_time = time.perf_counter() - start_time
-        logger.info(f"SigLIP model loaded in {load_time:.2f} seconds on {self.device}")
+        fastapi_logger.info(f"SigLIP model loaded in {load_time:.2f} seconds on {self.device}")
     
     def encode_text(self, texts: List[str]) -> np.ndarray:
         """

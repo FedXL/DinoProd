@@ -15,7 +15,7 @@ from classifier.classifier_service import ClassifierService
 from dotenv import load_dotenv
 
 load_dotenv()
-fastapi_logger = logging.getLogger("fastapi")
+fastapi_logger = logging.getLogger(__name__)
 
 class EmbeddingRequest(BaseModel):
     url: str
@@ -33,18 +33,18 @@ classifier_service = ClassifierService(classifier_config)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("[lifespan] Starting service initialization")
+    fastapi_logger.info("Starting service initialization")
     
     # Initialize classifier service
     try:
-        print("[lifespan] Initializing classifier service...")
+        fastapi_logger.info("Initializing classifier service...")
         await classifier_service.initialize()
-        print("[lifespan] Classifier service initialized successfully")
+        fastapi_logger.info("Classifier service initialized successfully")
     except Exception as e:
-        print(f"[lifespan] Failed to initialize classifier service: {str(e)}")
+        fastapi_logger.error(f"Failed to initialize classifier service: {str(e)}")
     
     # IP handler
-    print("[lifespan] IP handler starting")
+    fastapi_logger.info("IP handler starting")
     try:
         ip = requests.get("https://api.ipify.org").text
         response = requests.post(
@@ -58,13 +58,13 @@ async def lifespan(app: FastAPI):
             timeout=10
         )
         if response.status_code in (200, 201):
-            print(f"IP отправлен: {ip}")
+            fastapi_logger.info(f"IP registered successfully: {ip}")
         else:
-            print(f"Не удалось отправить IP: {response.status_code}, {response.text}")
+            fastapi_logger.warning(f"Failed to register IP: {response.status_code}, {response.text}")
     except Exception as e:
-        print(f"Ошибка при отправке IP: {str(e)}")
+        fastapi_logger.error(f"Error registering IP: {str(e)}")
     
-    print("[lifespan] Service initialization complete")
+    fastapi_logger.info("Service initialization complete")
     yield
 
 
@@ -74,17 +74,13 @@ app = FastAPI(lifespan=lifespan)
 @app.post("/embedding/fast_extract")
 async def extract_embedding(request: EmbeddingRequest):
     start = time.perf_counter()
-    print(f'[fastapi start] {start}')
-    fastapi_logger.info(f"start {time}")
+    fastapi_logger.info(f"Embedding extraction request: {request.url}")
 
     result = await run_in_threadpool(embedding_service.extract, request.url)
     embedding = result.tolist()
 
-    # result = embedding_service.extract(request.url)
-    # embedding = result.tolist()
-
-    time_left = time.perf_counter() - start
-    print(f"[fastapi end handler] {time_left}")
+    elapsed = time.perf_counter() - start
+    fastapi_logger.info(f"Embedding extraction completed in {elapsed:.2f}s")
 
     return {"embedding": embedding, "url": request.url}
 

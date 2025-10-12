@@ -8,7 +8,7 @@ from .config import ClassifierConfig
 from .model import SigLIPModel
 from .image_loader import AsyncImageLoader
 
-logger = logging.getLogger(__name__)
+fastapi_logger = logging.getLogger(__name__)
 
 
 class ClassificationResult:
@@ -51,21 +51,21 @@ class ClassifierService:
         This should be called once at startup.
         """
         if self._initialized:
-            logger.warning("Classifier service already initialized")
+            fastapi_logger.warning("Classifier service already initialized")
             return
         
-        logger.info("Initializing classifier service...")
+        fastapi_logger.info("Initializing classifier service...")
         start_time = time.perf_counter()
         
         # Load SigLIP model
-        logger.info(f"Loading SigLIP model: {self.config.model_name}")
+        fastapi_logger.info(f"Loading SigLIP model: {self.config.model_name}")
         self.model = SigLIPModel(self.config.model_name, self.config.device)
         
         # Prepare text prompts
         self.text_prompt_mappings = self.config.get_flat_prompts_with_categories()
         all_prompts = [prompt for prompt, _ in self.text_prompt_mappings]
         
-        logger.info(f"Computing embeddings for {len(all_prompts)} text prompts across {len(self.config.categories)} categories...")
+        fastapi_logger.info(f"Computing embeddings for {len(all_prompts)} text prompts across {len(self.config.categories)} categories...")
         
         # Compute text embeddings for all prompts
         text_embeddings = self.model.encode_text(all_prompts)
@@ -81,14 +81,14 @@ class ClassifierService:
             stacked = np.stack(embeddings_list)
             self.category_embeddings[category] = stacked
             
-            logger.info(f"Category '{category}': stored {len(embeddings_list)} individual text prompt embeddings")
+            fastapi_logger.info(f"Category '{category}': stored {len(embeddings_list)} individual text prompt embeddings")
         
         elapsed = time.perf_counter() - start_time
         total_categories = len(self.category_embeddings)
         total_prompts = len(all_prompts)
         
-        logger.info(f"Classifier initialized in {elapsed:.2f} seconds")
-        logger.info(f"Loaded {total_categories} categories with {total_prompts} total text variations")
+        fastapi_logger.info(f"Classifier initialized in {elapsed:.2f} seconds")
+        fastapi_logger.info(f"Loaded {total_categories} categories with {total_prompts} total text variations")
         
         self._initialized = True
     
@@ -122,11 +122,11 @@ class ClassifierService:
                 )
             
             # Encode image
-            logger.info("Computing image embedding...")
+            fastapi_logger.info("Computing image embedding...")
             start_time = time.perf_counter()
             image_embedding = self.model.encode_image(image)
             encoding_time = time.perf_counter() - start_time
-            logger.info(f"Image encoded in {encoding_time:.3f} seconds")
+            fastapi_logger.info(f"Image encoded in {encoding_time:.3f} seconds")
             
             # ✅ RESHAPE ONCE, before the loop
             img_emb = image_embedding.reshape(1, -1)
@@ -152,9 +152,9 @@ class ClassifierService:
                 result_category = "other"
                 result_confidence = best_confidence
             
-            logger.info(f"Classification result: {result_category} (confidence: {result_confidence:.3f})")
+            fastapi_logger.info(f"Classification result: {result_category} (confidence: {result_confidence:.3f})")
             similarities_str = ", ".join([f"{cat}: {score:.3f}" for cat, score in similarities.items()])
-            logger.info(f"Similarities: {similarities_str}")
+            fastapi_logger.info(f"Similarities: {similarities_str}")
             
             return ClassificationResult(
                 category=result_category,
@@ -164,7 +164,7 @@ class ClassifierService:
             
         except Exception as e:
             error_msg = f"Classification failed: {str(e)}"
-            logger.error(error_msg)
+            fastapi_logger.error(error_msg)
             return ClassificationResult(
                 category="",
                 confidence=0.0,
