@@ -1,5 +1,6 @@
 import os
 import json
+import torch
 from typing import Dict, List
 from pathlib import Path
 
@@ -9,7 +10,7 @@ class ClassifierConfig:
         self.model_name = os.getenv('CLASSIFIER_MODEL', 'google/siglip2-base-patch16-512')
         self.threshold = float(os.getenv('CLASSIFIER_THRESHOLD', '0.35'))
         self.categories_file = os.getenv('CATEGORIES_FILE', 'config/categories.json')
-        self.device = "cuda" if os.getenv('CUDA_AVAILABLE', 'true').lower() == 'true' else "cpu"
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         
         # Validate threshold
         if not 0.0 <= self.threshold <= 1.0:

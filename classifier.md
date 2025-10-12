@@ -147,7 +147,6 @@ TOKEN=your_artcracker_token
 CLASSIFIER_MODEL=google/siglip2-base-patch16-512
 CLASSIFIER_THRESHOLD=0.35
 CATEGORIES_FILE=config/categories.json
-CUDA_AVAILABLE=true
 ```
 
 #### 2. Category Configuration
@@ -369,11 +368,13 @@ async def process_concurrent(urls):
 ```
 RuntimeError: CUDA out of memory
 ```
-*Solution:* Use CPU mode or smaller model:
+*Solution:* Use smaller model or disable CUDA in code:
 ```bash
-CUDA_AVAILABLE=false  # Force CPU mode
-# OR
-CLASSIFIER_MODEL=google/siglip-base-patch16-224  # Smaller model
+# Use smaller model
+CLASSIFIER_MODEL=google/siglip2-base-patch16-224
+
+# Or modify config.py to force CPU:
+# self.device = "cpu"  # Force CPU mode
 ```
 
 **2. Image Download Timeouts**
