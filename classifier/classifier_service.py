@@ -57,31 +57,84 @@ class ClassifierService:
         fastapi_logger.info("Initializing classifier service...")
         start_time = time.perf_counter()
         
-        # Load SigLIP model
-        fastapi_logger.info(f"Loading SigLIP model: {self.config.model_name}")
-        self.model = SigLIPModel(self.config.model_name, self.config.device)
+        # Load SigLIP model with error handling
+        try:
+            fastapi_logger.info(f"Loading SigLIP model: {self.config.model_name}")
+            self.model = SigLIPModel(self.config.model_name, self.config.device)
+        except (ValueError, RuntimeError, OSError) as e:
+            error_msg = f"Failed to load SigLIP model '{self.config.model_name}': {str(e)}"
+            fastapi_logger.error(error_msg)
+            raise RuntimeError(error_msg) from e
+        except Exception as e:
+            error_msg = f"Unexpected error loading SigLIP model: {str(e)}"
+            fastapi_logger.error(error_msg)
+            raise RuntimeError(error_msg) from e
         
-        # Prepare text prompts
-        self.text_prompt_mappings = self.config.get_flat_prompts_with_categories()
-        all_prompts = [prompt for prompt, _ in self.text_prompt_mappings]
+        # Prepare text prompts with validation
+        try:
+            self.text_prompt_mappings = self.config.get_flat_prompts_with_categories()
+            all_prompts = [prompt for prompt, _ in self.text_prompt_mappings]
+            
+            if not all_prompts:
+                raise ValueError("No text prompts found in categories configuration")
+            
+            fastapi_logger.info(f"Computing embeddings for {len(all_prompts)} text prompts across {len(self.config.categories)} categories...")
+        except Exception as e:
+            error_msg = f"Failed to prepare text prompts: {str(e)}"
+            fastapi_logger.error(error_msg)
+            raise RuntimeError(error_msg) from e
         
-        fastapi_logger.info(f"Computing embeddings for {len(all_prompts)} text prompts across {len(self.config.categories)} categories...")
-        
-        # Compute text embeddings for all prompts
-        text_embeddings = self.model.encode_text(all_prompts)
+        # Compute text embeddings for all prompts with error handling
+        try:
+            text_embeddings = self.model.encode_text(all_prompts)
+            
+            if text_embeddings is None or len(text_embeddings) == 0:
+                raise ValueError("Model returned empty text embeddings")
+            
+            if len(text_embeddings) != len(all_prompts):
+                raise ValueError(f"Expected {len(all_prompts)} embeddings, got {len(text_embeddings)}")
+                
+            fastapi_logger.info(f"Successfully computed {len(text_embeddings)} text embeddings")
+        except Exception as e:
+            error_msg = f"Failed to compute text embeddings: {str(e)}"
+            fastapi_logger.error(error_msg)
+            raise RuntimeError(error_msg) from e
         
         # Group embeddings by category (keep individual embeddings, don't average!)
-        category_embeddings_lists = defaultdict(list)
-        for i, (prompt, category) in enumerate(self.text_prompt_mappings):
-            category_embeddings_lists[category].append(text_embeddings[i])
-        
-        # Store ALL individual embeddings per category
-        for category, embeddings_list in category_embeddings_lists.items():
-            # Stack embeddings into array but don't average - keep all individual vectors
-            stacked = np.stack(embeddings_list)
-            self.category_embeddings[category] = stacked
+        try:
+            category_embeddings_lists = defaultdict(list)
+            for i, (prompt, category) in enumerate(self.text_prompt_mappings):
+                if i >= len(text_embeddings):
+                    raise IndexError(f"Index {i} out of range for text_embeddings (length {len(text_embeddings)})")
+                category_embeddings_lists[category].append(text_embeddings[i])
             
-            fastapi_logger.info(f"Category '{category}': stored {len(embeddings_list)} individual text prompt embeddings")
+            if not category_embeddings_lists:
+                raise ValueError("No category embeddings were created")
+            
+            # Store ALL individual embeddings per category
+            for category, embeddings_list in category_embeddings_lists.items():
+                if not embeddings_list:
+                    fastapi_logger.warning(f"Category '{category}' has no embeddings, skipping")
+                    continue
+                    
+                try:
+                    # Stack embeddings into array but don't average - keep all individual vectors
+                    stacked = np.stack(embeddings_list)
+                    self.category_embeddings[category] = stacked
+                    
+                    fastapi_logger.info(f"Category '{category}': stored {len(embeddings_list)} individual text prompt embeddings")
+                except Exception as e:
+                    error_msg = f"Failed to stack embeddings for category '{category}': {str(e)}"
+                    fastapi_logger.error(error_msg)
+                    raise RuntimeError(error_msg) from e
+            
+            if not self.category_embeddings:
+                raise ValueError("No valid category embeddings were created")
+                
+        except Exception as e:
+            error_msg = f"Failed to process category embeddings: {str(e)}"
+            fastapi_logger.error(error_msg)
+            raise RuntimeError(error_msg) from e
         
         elapsed = time.perf_counter() - start_time
         total_categories = len(self.category_embeddings)
@@ -128,7 +181,7 @@ class ClassifierService:
             encoding_time = time.perf_counter() - start_time
             fastapi_logger.info(f"Image encoded in {encoding_time:.3f} seconds")
             
-            # ✅ RESHAPE ONCE, before the loop
+            # RESHAPE ONCE, before the loop
             img_emb = image_embedding.reshape(1, -1)
             
             # Compute similarities with all categories

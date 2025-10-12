@@ -17,23 +17,73 @@ class SigLIPModel:
         Args:
             model_name: HuggingFace model identifier
             device: Computing device (cuda/cpu)
+            
+        Raises:
+            ValueError: If model_name is invalid or empty
+            RuntimeError: If model fails to load or move to device
+            OSError: If model files cannot be downloaded or accessed
         """
+        if not model_name or not isinstance(model_name, str):
+            raise ValueError(f"Invalid model_name: {model_name}. Must be a non-empty string.")
+        
         self.model_name = model_name
         self.device = device if torch.cuda.is_available() else "cpu"
+        
+        # Log device info
+        if device == "cuda" and not torch.cuda.is_available():
+            fastapi_logger.warning(f"CUDA requested but not available, falling back to CPU")
+        elif self.device == "cuda":
+            fastapi_logger.info(f"Using CUDA device: {torch.cuda.get_device_name()}")
         
         fastapi_logger.info(f"Loading SigLIP model: {model_name}")
         start_time = time.perf_counter()
         
-        # Load processor and model
-        self.processor = AutoProcessor.from_pretrained(model_name)
-        self.model = AutoModel.from_pretrained(model_name)
-        
-        # Move model to device
-        self.model = self.model.to(self.device)
-        self.model.eval()
-        
-        load_time = time.perf_counter() - start_time
-        fastapi_logger.info(f"SigLIP model loaded in {load_time:.2f} seconds on {self.device}")
+        try:
+            # Load processor with error handling
+            try:
+                self.processor = AutoProcessor.from_pretrained(model_name)
+                fastapi_logger.info("Model processor loaded successfully")
+            except Exception as e:
+                raise OSError(f"Failed to load model processor for '{model_name}': {str(e)}")
+            
+            # Load model with error handling
+            try:
+                self.model = AutoModel.from_pretrained(model_name)
+                fastapi_logger.info("Model weights loaded successfully")
+            except Exception as e:
+                raise OSError(f"Failed to load model weights for '{model_name}': {str(e)}")
+            
+            # Move model to device with error handling
+            try:
+                self.model = self.model.to(self.device)
+                self.model.eval()
+                fastapi_logger.info(f"Model moved to {self.device} and set to eval mode")
+            except RuntimeError as e:
+                if "out of memory" in str(e).lower():
+                    # Try to fall back to CPU if CUDA OOM
+                    if self.device == "cuda":
+                        fastapi_logger.warning("CUDA out of memory, falling back to CPU")
+                        try:
+                            self.device = "cpu"
+                            self.model = self.model.to(self.device)
+                            self.model.eval()
+                            fastapi_logger.info("Successfully fell back to CPU")
+                        except Exception as fallback_e:
+                            raise RuntimeError(f"Failed to move model to CPU after CUDA OOM: {str(fallback_e)}")
+                    else:
+                        raise RuntimeError(f"Out of memory on {self.device}: {str(e)}")
+                else:
+                    raise RuntimeError(f"Failed to move model to {self.device}: {str(e)}")
+            except Exception as e:
+                raise RuntimeError(f"Unexpected error moving model to device: {str(e)}")
+            
+            load_time = time.perf_counter() - start_time
+            fastapi_logger.info(f"SigLIP model loaded successfully in {load_time:.2f} seconds on {self.device}")
+            
+        except Exception as e:
+            # Log the error and re-raise
+            fastapi_logger.error(f"Failed to initialize SigLIP model '{model_name}': {str(e)}")
+            raise
     
     def encode_text(self, texts: List[str]) -> np.ndarray:
         """

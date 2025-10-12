@@ -31,10 +31,17 @@ class AsyncImageLoader:
         try:
             # Validate URL format
             if not url or not isinstance(url, str):
-                return None, "Invalid URL format"
+                return None, "Invalid URL format: URL must be a non-empty string"
+            
+            # Trim whitespace
+            url = url.strip()
             
             if not (url.startswith('http://') or url.startswith('https://')):
                 return None, "URL must start with http:// or https://"
+            
+            # Basic URL length validation
+            if len(url) > 2048:  # RFC compliant max URL length
+                return None, "URL too long (max 2048 characters)"
             
             fastapi_logger.info(f"Downloading image from: {url}")
             

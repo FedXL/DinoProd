@@ -41,7 +41,9 @@ async def lifespan(app: FastAPI):
         await classifier_service.initialize()
         fastapi_logger.info("Classifier service initialized successfully")
     except Exception as e:
-        fastapi_logger.error(f"Failed to initialize classifier service: {str(e)}")
+        fastapi_logger.error(f"CRITICAL: Failed to initialize classifier service: {str(e)}")
+        fastapi_logger.error("Service will continue but classification endpoints will not work")
+        # Note: We continue startup to allow health checks and embedding endpoints to work
     
     # IP handler
     fastapi_logger.info("IP handler starting")
@@ -113,11 +115,25 @@ async def classify_image(request: ClassifyRequest):
     start_time = time.perf_counter()
     fastapi_logger.info(f"Classification request: {request.url}")
     
+    # Check if classifier service is initialized
+    if not classifier_service._initialized:
+        fastapi_logger.error("Classification request rejected: service not initialized")
+        return {
+            "success": False,
+            "category": None,
+            "confidence": None,
+            "error": "Classification service is not available. Please check server logs."
+        }
+    
     # Classify image (service handles all errors internally)
     result = await classifier_service.classify_image(request.url)
     
     elapsed = time.perf_counter() - start_time
-    fastapi_logger.info(f"Classification completed in {elapsed:.2f}s: {result.category}")
+    
+    if result.success:
+        fastapi_logger.info(f"Classification completed in {elapsed:.2f}s: {result.category} (confidence: {result.confidence:.3f})")
+    else:
+        fastapi_logger.warning(f"Classification failed in {elapsed:.2f}s: {result.error}")
     
     return result.to_dict()
 
