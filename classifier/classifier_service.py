@@ -57,16 +57,16 @@ class ClassifierService:
         fastapi_logger.info("Initializing classifier service...")
         start_time = time.perf_counter()
         
-        # Load SigLIP model with error handling
+        # Load model with error handling
         try:
-            fastapi_logger.info(f"Loading SigLIP model: {self.config.model_name}")
+            fastapi_logger.info(f"Loading model: {self.config.model_name}")
             self.model = SigLIPModel(self.config.model_name, self.config.device)
         except (ValueError, RuntimeError, OSError) as e:
-            error_msg = f"Failed to load SigLIP model '{self.config.model_name}': {str(e)}"
+            error_msg = f"Failed to load model '{self.config.model_name}': {str(e)}"
             fastapi_logger.error(error_msg)
             raise RuntimeError(error_msg) from e
         except Exception as e:
-            error_msg = f"Unexpected error loading SigLIP model: {str(e)}"
+            error_msg = f"Unexpected error loading model: {str(e)}"
             fastapi_logger.error(error_msg)
             raise RuntimeError(error_msg) from e
         

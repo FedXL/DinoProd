@@ -35,7 +35,7 @@ class SigLIPModel:
         elif self.device == "cuda":
             fastapi_logger.info(f"Using CUDA device: {torch.cuda.get_device_name()}")
         
-        fastapi_logger.info(f"Loading SigLIP model: {model_name}")
+        fastapi_logger.info(f"Loading model: {model_name}")
         start_time = time.perf_counter()
         
         try:
@@ -78,11 +78,11 @@ class SigLIPModel:
                 raise RuntimeError(f"Unexpected error moving model to device: {str(e)}")
             
             load_time = time.perf_counter() - start_time
-            fastapi_logger.info(f"SigLIP model loaded successfully in {load_time:.2f} seconds on {self.device}")
+            fastapi_logger.info(f"{model_name} model loaded successfully in {load_time:.2f} seconds on {self.device}")
             
         except Exception as e:
             # Log the error and re-raise
-            fastapi_logger.error(f"Failed to initialize SigLIP model '{model_name}': {str(e)}")
+            fastapi_logger.error(f"Failed to initialize  model '{model_name}': {str(e)}")
             raise
     
     def encode_text(self, texts: List[str]) -> np.ndarray:
