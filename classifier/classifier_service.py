@@ -128,21 +128,17 @@ class ClassifierService:
             encoding_time = time.perf_counter() - start_time
             logger.info(f"Image encoded in {encoding_time:.3f} seconds")
             
+            # ✅ RESHAPE ONCE, before the loop
+            img_emb = image_embedding.reshape(1, -1)
+            
             # Compute similarities with all categories
             similarities = {}
             for category, text_embeddings in self.category_embeddings.items():
-                # Compare to ALL embeddings for this category, take MAX
-                img_emb = image_embedding.reshape(1, -1)
-                
-                # Compute similarity to all text prompts for this category
-                category_similarities = []
-                for text_emb in text_embeddings:
-                    text_emb_reshaped = text_emb.reshape(1, -1)
-                    similarity = self.model.compute_similarity(img_emb, text_emb_reshaped)[0]
-                    category_similarities.append(float(similarity))
+                # Compute similarity to ALL text embeddings at once (batch operation)
+                similarity_scores = self.model.compute_similarity(img_emb, text_embeddings)
                 
                 # Take the BEST (maximum) similarity for this category
-                similarities[category] = max(category_similarities)
+                similarities[category] = float(np.max(similarity_scores))
             
             # Find best match
             best_category = max(similarities, key=similarities.get)
@@ -157,7 +153,8 @@ class ClassifierService:
                 result_confidence = best_confidence
             
             logger.info(f"Classification result: {result_category} (confidence: {result_confidence:.3f})")
-            logger.info(f"All similarities: {similarities}")
+            similarities_str = ", ".join([f"{cat}: {score:.3f}" for cat, score in similarities.items()])
+            logger.info(f"Similarities: {similarities_str}")
             
             return ClassificationResult(
                 category=result_category,
