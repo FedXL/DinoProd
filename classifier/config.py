@@ -48,10 +48,6 @@ class ClassifierConfig:
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON in categories file: {e}")
     
-    def get_all_text_prompts(self) -> Dict[str, List[str]]:
-        """Get all text prompts organized by category."""
-        return self.categories.copy()
-    
     def get_flat_prompts_with_categories(self) -> List[tuple]:
         """Get flat list of (prompt, category) tuples for embedding computation."""
         prompts = []

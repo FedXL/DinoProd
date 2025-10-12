@@ -101,63 +101,35 @@ class ClassifyRequest(BaseModel):
 @app.post("/classifier/classify")
 async def classify_image(request: ClassifyRequest):
     """
-    Classify an image into predefined categories.
+    Classify an image into predefined categories using zero-shot classification.
     
-    Request body:
-    {
-        "url": "https://example.com/image.jpg"
-    }
+    Request:
+        {"url": "https://example.com/image.jpg"}
     
     Response:
-    {
-        "success": true,
-        "category": "building",  // or "painting" or "other"
-        "confidence": 0.87,
-        "error": null
-    }
-    
-    Error response:
-    {
-        "success": false,
-        "category": null,
-        "confidence": null,
-        "error": "Failed to download image: timeout"
-    }
+        {
+            "success": true,
+            "category": "building",
+            "confidence": 0.87,
+            "error": null
+        }
     """
     start_time = time.perf_counter()
-    fastapi_logger.info(f"Classification request received for URL: {request.url}")
+    fastapi_logger.info(f"Classification request: {request.url}")
     
-    try:
-        # Classify the image
-        result = await classifier_service.classify_image(request.url)
-        
-        elapsed = time.perf_counter() - start_time
-        fastapi_logger.info(f"Classification completed in {elapsed:.2f} seconds")
-        
-        return result.to_dict()
-        
-    except Exception as e:
-        elapsed = time.perf_counter() - start_time
-        error_msg = f"Unexpected error during classification: {str(e)}"
-        fastapi_logger.error(f"{error_msg} (took {elapsed:.2f}s)")
-        
-        return {
-            "success": False,
-            "category": None,
-            "confidence": None,
-            "error": error_msg
-        }
+    # Classify image (service handles all errors internally)
+    result = await classifier_service.classify_image(request.url)
+    
+    elapsed = time.perf_counter() - start_time
+    fastapi_logger.info(f"Classification completed in {elapsed:.2f}s: {result.category}")
+    
+    return result.to_dict()
 
 
 
 
 embedding_semaphore = asyncio.Semaphore(1)  # максимум 1 запрос к модели одновременно
 
-# 💬 Запрос
-class EmbeddingRequest(BaseModel):
-    url: str
-
-# 💬 FastAPI
 
 
 # @app.post("/embedding/test_extract")
