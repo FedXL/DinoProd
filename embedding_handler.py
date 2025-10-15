@@ -51,7 +51,7 @@ class Dino3ExtractorV1(EmbeddingExtractor):
     
     def __init__(
         self,
-        model_name: str = "facebook/dinov3-vitl16-pretrain-lvd1689m",
+        model_name: str = "facebook/dinov3-vitl16",
         device: Optional[str] = None
     ):
         """
