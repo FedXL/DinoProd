@@ -13,15 +13,10 @@ from io import BytesIO
 from transformers import AutoImageProcessor, AutoModel
 from transformers import CLIPImageProcessor
 from transformers import pipeline
-
 load_dotenv()
-HF_TOKEN = os.getenv('HF_TOKEN')
 from huggingface_hub import login
 
-
-
-load_dotenv()
-HF_TOKEN = os.getenv('HF_TOKEN')
+HF_TOKEN = os.getenv('HG_TOKEN')
 
 class EmbeddingExtractor(ABC):
     @abstractmethod
