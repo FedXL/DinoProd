@@ -1,7 +1,9 @@
+import os
 from abc import ABC, abstractmethod
 from typing import Union, BinaryIO, Optional, Tuple
 import torch
 from PIL.ImageFile import ImageFile
+from dotenv import load_dotenv
 from torchvision import transforms
 from PIL import Image
 import numpy as np
@@ -12,6 +14,8 @@ from transformers import AutoImageProcessor, AutoModel
 from transformers import CLIPImageProcessor
 from transformers import pipeline
 
+load_dotenv()
+HF_TOKEN = os.getenv('HF_TOKEN')
 
 class EmbeddingExtractor(ABC):
     @abstractmethod
@@ -43,7 +47,12 @@ class URLImageLoader(ImageLoader):
         print(f'[Конец загрузки изображения] {time_left}')
         return img, message
 
-class Dino3ExtractorV1(EmbeddingExtractor):
+
+
+load_dotenv()
+HF_TOKEN = os.getenv('HF_TOKEN')
+
+class Dino3ExtractorV1_0(EmbeddingExtractor):
     """
     Simple DINOv3 embedding extractor for global image embeddings.
     Perfect for image similarity and comparison tasks using cosine similarity.
@@ -85,25 +94,61 @@ class Dino3ExtractorV1(EmbeddingExtractor):
     def extract(self, image: Image.Image) -> np.ndarray:
         """
         Extract global embedding from an image.
-        
+
         Arg s:
             image (PIL.Image.Image): Input image
-            
+
         Returns:
             np.ndarray: Dense embedding vector for the entire image.
                        Shape: (embedding_dim,) - ready for cosine similarity.
         """
         # Preprocess image
         inputs = self.processor(images=image, return_tensors="pt").to(self.model.device)
-        
+
         # Extract features
         with torch.inference_mode():
             outputs = self.model(**inputs)
-        
+
         # Get global embedding (CLS token)
         embedding = outputs.pooler_output.squeeze().cpu().numpy()
-        
+
         return embedding
+
+
+class Dino3ExtractorV1(Dino3ExtractorV1_0):
+    """
+    Simple DINOv3 embedding extractor for global image embeddings.
+    Perfect for image similarity and comparison tasks using cosine similarity.
+    """
+
+    def __init__(
+            self,
+            model_name: str = "facebook/dinov3-vitl16-pretrain-lvd1689m",
+            device: str | None = None
+    ):
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+
+        print("🔑 Using Hugging Face token:", HF_TOKEN[:8] + "..." if HF_TOKEN else "❌ None found")
+
+        # ✅ Подключаем токен в from_pretrained
+        self.processor = AutoImageProcessor.from_pretrained(
+            model_name,
+            token=HF_TOKEN
+        )
+        self.model = AutoModel.from_pretrained(
+            model_name,
+            token=HF_TOKEN,
+            device_map="auto"
+        )
+
+        self.model.eval()
+        self.embedding_dim = self.model.config.hidden_size
+
+        print(f"✅ Loaded DINOv3 model: {model_name}")
+        print(f"📐 Embedding dimension: {self.embedding_dim}")
+        print(f"💻 Device: {self.device}")
+
+
 
 
 class Dino3ExtractorV1pipeline(EmbeddingExtractor):

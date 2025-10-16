@@ -3,6 +3,8 @@ import json
 import torch
 from typing import Dict, List
 from pathlib import Path
+from dotenv import load_dotenv
+
 
 
 class ClassifierConfig:
