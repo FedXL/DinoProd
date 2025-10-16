@@ -16,7 +16,7 @@ from transformers import pipeline
 load_dotenv()
 from huggingface_hub import login
 
-HF_TOKEN = os.getenv('HG_TOKEN')
+hf_token = os.getenv('HG_TOKEN')
 
 class EmbeddingExtractor(ABC):
     @abstractmethod
@@ -67,7 +67,7 @@ class Dino3ExtractorV1(EmbeddingExtractor):
         load_dotenv()
 
         # 🔹 Read Hugging Face token from env
-        hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_TOKEN")
+
 
         if not hf_token:
             raise ValueError("❌ HF_TOKEN not found in environment. Please set it in .env or export it.")
