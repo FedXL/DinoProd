@@ -1,7 +1,9 @@
+import os
 from abc import ABC, abstractmethod
 from typing import Union, BinaryIO, Optional, Tuple
 import torch
 from PIL.ImageFile import ImageFile
+from dotenv import load_dotenv
 from torchvision import transforms
 from PIL import Image
 import numpy as np
@@ -11,7 +13,10 @@ from io import BytesIO
 from transformers import AutoImageProcessor, AutoModel
 from transformers import CLIPImageProcessor
 from transformers import pipeline
+load_dotenv()
+from huggingface_hub import login
 
+hf_token = os.getenv('HG_TOKEN')
 
 class EmbeddingExtractor(ABC):
     @abstractmethod
@@ -43,67 +48,73 @@ class URLImageLoader(ImageLoader):
         print(f'[Конец загрузки изображения] {time_left}')
         return img, message
 
+
+
+
+
 class Dino3ExtractorV1(EmbeddingExtractor):
     """
     Simple DINOv3 embedding extractor for global image embeddings.
     Perfect for image similarity and comparison tasks using cosine similarity.
     """
-    
+
     def __init__(
         self,
         model_name: str = "facebook/dinov3-vitl16-pretrain-lvd1689m",
-        device: Optional[str] = None
+        device: str | None = None,
     ):
-        """
-        Initialize the DINOv3 embedding extractor.
-        
-        Args:
-            model_name (str): DINOv3 model variant. Options:
-                - facebook/dinov3-vits16-pretrain-lvd1689m (384 dim, fastest)
-                - facebook/dinov3-vitb16-pretrain-lvd1689m (768 dim, balanced)
-                - facebook/dinov3-vitl16-pretrain-lvd1689m (1024 dim, better quality)
-            device (str, optional): Device for inference. Auto-detected if None.
-        """
+        # 🔹 Load .env file
+        load_dotenv()
+
+        # 🔹 Read Hugging Face token from env
+
+
+        if not hf_token:
+            raise ValueError("❌ HF_TOKEN not found in environment. Please set it in .env or export it.")
+
+        # 🔹 Authenticate Hugging Face
+        login(hf_token, add_to_git_credential=True)
+        print(f"🔑 Authenticated with Hugging Face token: {hf_token[:8]}...")
+
+        # 🔹 Choose device
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        
-        # Load processor and model
-        self.processor = AutoImageProcessor.from_pretrained(model_name)
-        self.model = AutoModel.from_pretrained(
-            model_name,
-            # torch_dtype=torch.float16,
-            device_map="auto"
-        )
+
+        # 🔹 Load model and processor with token
+        print(f"📥 Loading model: {model_name} ...")
+        self.processor = AutoImageProcessor.from_pretrained(model_name, token=hf_token)
+        self.model = AutoModel.from_pretrained(model_name, token=hf_token, device_map="auto")
+
         self.model.eval()
-        
-        # Store embedding dimension for reference
         self.embedding_dim = self.model.config.hidden_size
-        
-        print(f"Loaded DINOv3 model: {model_name}")
-        print(f"Embedding dimension: {self.embedding_dim}")
-        print(f"Device: {self.device}")
+
+        print(f"✅ Model loaded: {model_name}")
+        print(f"📐 Embedding dimension: {self.embedding_dim}")
+        print(f"💻 Device: {self.device}")
 
     def extract(self, image: Image.Image) -> np.ndarray:
         """
         Extract global embedding from an image.
-        
-        Arg s:
+
+        Args:
             image (PIL.Image.Image): Input image
-            
+
         Returns:
             np.ndarray: Dense embedding vector for the entire image.
-                       Shape: (embedding_dim,) - ready for cosine similarity.
         """
-        # Preprocess image
+        # 🔹 Preprocess image
         inputs = self.processor(images=image, return_tensors="pt").to(self.model.device)
-        
-        # Extract features
+
+        # 🔹 Forward pass
         with torch.inference_mode():
             outputs = self.model(**inputs)
-        
-        # Get global embedding (CLS token)
+
+        # 🔹 Use CLS token as global embedding
         embedding = outputs.pooler_output.squeeze().cpu().numpy()
-        
         return embedding
+
+
+
+
 
 
 class Dino3ExtractorV1pipeline(EmbeddingExtractor):
