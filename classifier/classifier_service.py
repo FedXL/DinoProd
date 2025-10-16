@@ -1,8 +1,7 @@
 import numpy as np
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional
 import logging
 import time
-from collections import defaultdict
 
 from .config import ClassifierConfig
 from .model import SigLIPModel
@@ -17,7 +16,7 @@ class ClassificationResult:
         self.confidence = confidence
         self.success = success
         self.error = error
-    
+
     def to_dict(self) -> dict:
         return {
             "success": self.success,
@@ -31,32 +30,32 @@ class ClassifierService:
     def __init__(self, config: ClassifierConfig):
         """
         Initialize classifier service with configuration.
-        
+
         Args:
             config: Configuration object with model settings and categories
         """
         self.config = config
         self.model: Optional[SigLIPModel] = None
         self.image_loader = AsyncImageLoader()
-        
-        # In-memory storage for category embeddings
+
+        # Store text prompts and pre-computed embeddings per category
+        self.category_prompts: Dict[str, List[str]] = {}
         self.category_embeddings: Dict[str, np.ndarray] = {}
-        self.text_prompt_mappings: List[Tuple[str, str]] = []  # (prompt, category)
-        
+
         self._initialized = False
     
     async def initialize(self):
         """
-        Initialize the classifier service by loading model and computing category embeddings.
+        Initialize the classifier service by loading model and pre-computing category embeddings.
         This should be called once at startup.
         """
         if self._initialized:
             fastapi_logger.warning("Classifier service already initialized")
             return
-        
+
         fastapi_logger.info("Initializing classifier service...")
         start_time = time.perf_counter()
-        
+
         # Load model with error handling
         try:
             fastapi_logger.info(f"Loading model: {self.config.model_name}")
@@ -69,89 +68,59 @@ class ClassifierService:
             error_msg = f"Unexpected error loading model: {str(e)}"
             fastapi_logger.error(error_msg)
             raise RuntimeError(error_msg) from e
-        
-        # Prepare text prompts with validation
+
+        # Pre-compute text embeddings for all category prompts
         try:
-            self.text_prompt_mappings = self.config.get_flat_prompts_with_categories()
-            all_prompts = [prompt for prompt, _ in self.text_prompt_mappings]
-            
-            if not all_prompts:
-                raise ValueError("No text prompts found in categories configuration")
-            
-            fastapi_logger.info(f"Computing embeddings for {len(all_prompts)} text prompts across {len(self.config.categories)} categories...")
-        except Exception as e:
-            error_msg = f"Failed to prepare text prompts: {str(e)}"
-            fastapi_logger.error(error_msg)
-            raise RuntimeError(error_msg) from e
-        
-        # Compute text embeddings for all prompts with error handling
-        try:
-            text_embeddings = self.model.encode_text(all_prompts)
-            
-            if text_embeddings is None or len(text_embeddings) == 0:
-                raise ValueError("Model returned empty text embeddings")
-            
-            if len(text_embeddings) != len(all_prompts):
-                raise ValueError(f"Expected {len(all_prompts)} embeddings, got {len(text_embeddings)}")
-                
-            fastapi_logger.info(f"Successfully computed {len(text_embeddings)} text embeddings")
-        except Exception as e:
-            error_msg = f"Failed to compute text embeddings: {str(e)}"
-            fastapi_logger.error(error_msg)
-            raise RuntimeError(error_msg) from e
-        
-        # Group embeddings by category (keep individual embeddings, don't average!)
-        try:
-            category_embeddings_lists = defaultdict(list)
-            for i, (prompt, category) in enumerate(self.text_prompt_mappings):
-                if i >= len(text_embeddings):
-                    raise IndexError(f"Index {i} out of range for text_embeddings (length {len(text_embeddings)})")
-                category_embeddings_lists[category].append(text_embeddings[i])
-            
-            if not category_embeddings_lists:
+            self.category_prompts = self.config.categories.copy()
+
+            if not self.category_prompts:
+                raise ValueError("No categories found in configuration")
+
+            total_prompts = sum(len(prompts) for prompts in self.category_prompts.values())
+            fastapi_logger.info(f"Pre-computing embeddings for {total_prompts} text prompts across {len(self.category_prompts)} categories...")
+
+            # Encode all prompts and store by category
+            category_embeddings = {}
+            for category, prompts in self.category_prompts.items():
+                embeddings = self.model.encode_text(prompts)
+
+                # Validate embeddings
+                if embeddings is None or len(embeddings) == 0:
+                    raise ValueError(f"Failed to encode text prompts for category '{category}'")
+                if len(embeddings) != len(prompts):
+                    raise ValueError(f"Mismatch in embeddings for category '{category}': expected {len(prompts)}, got {len(embeddings)}")
+
+                # Debug: log embedding statistics
+                for i, (prompt, emb) in enumerate(zip(prompts, embeddings)):
+                    emb_norm = float(np.linalg.norm(emb))
+                    emb_mean = float(np.mean(emb))
+                    fastapi_logger.debug(f"  Text embedding [{i}] '{prompt}': norm={emb_norm:.4f}, mean={emb_mean:.4f}")
+
+                category_embeddings[category] = embeddings
+                fastapi_logger.info(f"Category '{category}': pre-computed {len(prompts)} text embeddings")
+
+            if not category_embeddings:
                 raise ValueError("No category embeddings were created")
-            
-            # Store ALL individual embeddings per category
-            for category, embeddings_list in category_embeddings_lists.items():
-                if not embeddings_list:
-                    fastapi_logger.warning(f"Category '{category}' has no embeddings, skipping")
-                    continue
-                    
-                try:
-                    # Stack embeddings into array but don't average - keep all individual vectors
-                    stacked = np.stack(embeddings_list)
-                    self.category_embeddings[category] = stacked
-                    
-                    fastapi_logger.info(f"Category '{category}': stored {len(embeddings_list)} individual text prompt embeddings")
-                except Exception as e:
-                    error_msg = f"Failed to stack embeddings for category '{category}': {str(e)}"
-                    fastapi_logger.error(error_msg)
-                    raise RuntimeError(error_msg) from e
-            
-            if not self.category_embeddings:
-                raise ValueError("No valid category embeddings were created")
-                
+
+            self.category_embeddings = category_embeddings
+
         except Exception as e:
-            error_msg = f"Failed to process category embeddings: {str(e)}"
+            error_msg = f"Failed to pre-compute category embeddings: {str(e)}"
             fastapi_logger.error(error_msg)
             raise RuntimeError(error_msg) from e
-        
+
         elapsed = time.perf_counter() - start_time
-        total_categories = len(self.category_embeddings)
-        total_prompts = len(all_prompts)
-        
         fastapi_logger.info(f"Classifier initialized in {elapsed:.2f} seconds")
-        fastapi_logger.info(f"Loaded {total_categories} categories with {total_prompts} total text variations")
-        
+
         self._initialized = True
     
     async def classify_image(self, image_url: str) -> ClassificationResult:
         """
-        Classify an image from URL into predefined categories.
-        
+        Classify an image from URL into predefined categories using pre-computed embeddings.
+
         Args:
             image_url: URL of the image to classify
-            
+
         Returns:
             ClassificationResult with category, confidence, and success status
         """
@@ -162,7 +131,16 @@ class ClassifierService:
                 success=False,
                 error="Classifier service not initialized"
             )
-        
+
+        # Additional safety check
+        if not self.category_embeddings:
+            return ClassificationResult(
+                category="",
+                confidence=0.0,
+                success=False,
+                error="No category embeddings available"
+            )
+
         try:
             # Download and load image
             image, error_msg = await self.image_loader.load_image(image_url)
@@ -173,30 +151,51 @@ class ClassifierService:
                     success=False,
                     error=error_msg
                 )
-            
+
             # Encode image
             fastapi_logger.info("Computing image embedding...")
             start_time = time.perf_counter()
             image_embedding = self.model.encode_image(image)
             encoding_time = time.perf_counter() - start_time
             fastapi_logger.info(f"Image encoded in {encoding_time:.3f} seconds")
-            
-            # RESHAPE ONCE, before the loop
+
+            # Debug: log embedding statistics
+            img_norm = float(np.linalg.norm(image_embedding))
+            img_mean = float(np.mean(image_embedding))
+            img_std = float(np.std(image_embedding))
+            img_min = float(np.min(image_embedding))
+            img_max = float(np.max(image_embedding))
+            fastapi_logger.debug(f"Image embedding stats: norm={img_norm:.4f}, mean={img_mean:.4f}, std={img_std:.4f}, min={img_min:.4f}, max={img_max:.4f}")
+
+            # Reshape once for all comparisons
             img_emb = image_embedding.reshape(1, -1)
-            
-            # Compute similarities with all categories
+
+            # Compute similarities with pre-computed category embeddings
             similarities = {}
             for category, text_embeddings in self.category_embeddings.items():
-                # Compute similarity to ALL text embeddings at once (batch operation)
-                similarity_scores = self.model.compute_similarity(img_emb, text_embeddings)
-                
+                # Compute similarity to ALL pre-computed text embeddings at once
+                similarity_scores = self.model.compute_similarity_from_embeddings(img_emb, text_embeddings)
+
+                # Debug logging: show individual prompt similarities
+                prompts = self.category_prompts[category]
+                fastapi_logger.debug(f"Category '{category}' prompt similarities:")
+                for i, (prompt, score) in enumerate(zip(prompts, similarity_scores)):
+                    fastapi_logger.debug(f"  [{i}] '{prompt}': {score:.4f}")
+
                 # Take the BEST (maximum) similarity for this category
-                similarities[category] = float(np.max(similarity_scores))
-            
+                max_score = float(np.max(similarity_scores))
+                max_idx = int(np.argmax(similarity_scores))
+                similarities[category] = max_score
+
+                fastapi_logger.info(f"Category '{category}': best score = {max_score:.4f} (prompt: '{prompts[max_idx]}')")
+
+            classification_time = time.perf_counter() - start_time
+            fastapi_logger.info(f"Classification completed in {classification_time:.3f} seconds")
+
             # Find best match
             best_category = max(similarities, key=similarities.get)
             best_confidence = similarities[best_category]
-            
+
             # Apply threshold
             if best_confidence >= self.config.threshold:
                 result_category = best_category
@@ -204,17 +203,17 @@ class ClassifierService:
             else:
                 result_category = "other"
                 result_confidence = best_confidence
-            
+
             fastapi_logger.info(f"Classification result: {result_category} (confidence: {result_confidence:.3f})")
             similarities_str = ", ".join([f"{cat}: {score:.3f}" for cat, score in similarities.items()])
             fastapi_logger.info(f"Similarities: {similarities_str}")
-            
+
             return ClassificationResult(
                 category=result_category,
                 confidence=result_confidence,
                 success=True
             )
-            
+
         except Exception as e:
             error_msg = f"Classification failed: {str(e)}"
             fastapi_logger.error(error_msg)

@@ -15,6 +15,15 @@ from classifier.classifier_service import ClassifierService
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Configure logging
+LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
 fastapi_logger = logging.getLogger(__name__)
 
 class EmbeddingRequest(BaseModel):
