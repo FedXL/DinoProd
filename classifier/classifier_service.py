@@ -88,8 +88,8 @@ class ClassifierService:
                 # Log SigLIP's learned parameters
                 logit_scale = self.model.model.logit_scale.exp().item()
                 logit_bias = self.model.model.logit_bias.item()
-                fastapi_logger.info(f"SigLIP learned parameters: logit_scale={logit_scale:.4f}, logit_bias={logit_bias:.4f}")
-                fastapi_logger.info("Using: sigmoid(cosine_similarity * logit_scale + logit_bias)")
+                fastapi_logger.info(f"SigLIP learned parameters: logit_scale={logit_scale:.4f}, logit_bias={logit_bias:.4f} (bias not used for zero-shot)")
+                fastapi_logger.info("Using: sigmoid(cosine_similarity * logit_scale)")
 
                 # Encode all prompts and store by category
                 category_embeddings = {}

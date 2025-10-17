@@ -151,19 +151,20 @@ class SigLIPModel:
         Returns:
             Sigmoid probabilities for each text prompt (range: 0 to 1)
         """
-        # Get SigLIP's learned temperature (logit_scale) and bias (logit_bias)
+        # Get SigLIP's learned temperature (logit_scale)
+        # NOTE: We don't use logit_bias for zero-shot classification as it's calibrated
+        # for contrastive learning and makes all scores very negative
         logit_scale = self.model.logit_scale.exp().item()  # exp() because it's stored in log space
-        logit_bias = self.model.logit_bias.item()
 
         # Compute cosine similarity (dot product of normalized vectors)
         cosine_sim = np.dot(image_embedding, text_embeddings.T)
 
-        # Apply SigLIP's learned scaling and bias
-        logits = cosine_sim * logit_scale + logit_bias
+        # Apply SigLIP's learned scaling (without bias for zero-shot)
+        logits = cosine_sim * logit_scale
 
         # Debug logging
         fastapi_logger.debug(f"Cosine similarities: {cosine_sim.flatten()}")
-        fastapi_logger.debug(f"After scaling (scale={logit_scale:.4f}, bias={logit_bias:.4f}): {logits.flatten()}")
+        fastapi_logger.debug(f"After scaling (scale={logit_scale:.4f}): {logits.flatten()}")
 
         # Apply sigmoid to get probabilities
         probs = 1.0 / (1.0 + np.exp(-logits))
