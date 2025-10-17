@@ -14,5 +14,16 @@
     "painting of a building",
     "artistic work",
     "photo of a sketch"
+  ], 
+  "other": [
+    
+    "a photo of a cat",
+    "a photo of a dog",
+    "a photo of a bird",
+    "a photo of a fish",
+    "a photo of a horse",
+    "a photo of a car",
+    "a photo of a truck",
+    "a photo of a motorcycle"
   ]
 }
