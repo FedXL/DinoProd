@@ -84,7 +84,12 @@ class ClassifierService:
 
             if self.use_precomputed_embeddings:
                 fastapi_logger.info(f"Pre-computing embeddings for {total_prompts} text prompts across {len(self.category_prompts)} categories...")
-                fastapi_logger.info("Using pre-computed embeddings with sigmoid similarity (un-normalized embeddings + dot product + sigmoid)")
+
+                # Log SigLIP's learned parameters
+                logit_scale = self.model.model.logit_scale.exp().item()
+                logit_bias = self.model.model.logit_bias.item()
+                fastapi_logger.info(f"SigLIP learned parameters: logit_scale={logit_scale:.4f}, logit_bias={logit_bias:.4f}")
+                fastapi_logger.info("Using: sigmoid(cosine_similarity * logit_scale + logit_bias)")
 
                 # Encode all prompts and store by category
                 category_embeddings = {}

@@ -93,7 +93,7 @@ class SigLIPModel:
             texts: List of text prompts to encode
 
         Returns:
-            Un-normalized text embeddings as numpy array (for use with sigmoid)
+            Normalized text embeddings as numpy array
         """
         with torch.no_grad():
             # Process texts
@@ -105,11 +105,13 @@ class SigLIPModel:
             )
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
-            # Get text embeddings - DO NOT NORMALIZE
-            # SigLIP embeddings should NOT be normalized - they contain learned temperature scaling
+            # Get text embeddings and normalize
+            # Note: get_text_features returns un-normalized embeddings
+            # We must normalize them for proper similarity comparison
             text_outputs = self.model.get_text_features(**inputs)
+            text_embeddings = text_outputs / text_outputs.norm(p=2, dim=-1, keepdim=True)
 
-            return text_outputs.cpu().numpy()
+            return text_embeddings.cpu().numpy()
 
     def encode_image(self, image: Image.Image) -> np.ndarray:
         """
@@ -119,7 +121,7 @@ class SigLIPModel:
             image: PIL Image to encode
 
         Returns:
-            Un-normalized image embedding as numpy array (for use with sigmoid)
+            Normalized image embedding as numpy array
         """
         with torch.no_grad():
             # Ensure image is RGB
@@ -130,28 +132,36 @@ class SigLIPModel:
             inputs = self.processor(images=image, return_tensors="pt")
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
-            # Get image embeddings - DO NOT NORMALIZE
-            # SigLIP embeddings should NOT be normalized - they contain learned temperature scaling
+            # Get image embeddings and normalize
+            # Note: get_image_features returns un-normalized embeddings
+            # We must normalize them for proper similarity comparison
             image_outputs = self.model.get_image_features(**inputs)
+            image_embeddings = image_outputs / image_outputs.norm(p=2, dim=-1, keepdim=True)
 
-            return image_outputs.cpu().numpy()
+            return image_embeddings.cpu().numpy()
 
     def compute_similarity_from_embeddings(self, image_embedding: np.ndarray, text_embeddings: np.ndarray) -> np.ndarray:
         """
-        Compute similarity between pre-computed image and text embeddings using SigLIP's sigmoid approach.
+        Compute similarity between pre-computed normalized embeddings using SigLIP's learned parameters.
 
         Args:
-            image_embedding: Single image embedding (1, embedding_dim) - un-normalized
-            text_embeddings: Multiple text embeddings (num_texts, embedding_dim) - un-normalized
+            image_embedding: Single image embedding (1, embedding_dim) - normalized to unit length
+            text_embeddings: Multiple text embeddings (num_texts, embedding_dim) - normalized to unit length
 
         Returns:
-            Similarity scores (probabilities after sigmoid) for each text prompt
+            Sigmoid probabilities for each text prompt (range: 0 to 1)
         """
-        # Compute logits (raw dot product - contains learned temperature scaling from model)
-        logits = np.dot(image_embedding, text_embeddings.T)
+        # Get SigLIP's learned temperature (logit_scale) and bias (logit_bias)
+        logit_scale = self.model.logit_scale.exp().item()  # exp() because it's stored in log space
+        logit_bias = self.model.logit_bias.item()
+
+        # Compute cosine similarity (dot product of normalized vectors)
+        cosine_sim = np.dot(image_embedding, text_embeddings.T)
+
+        # Apply SigLIP's learned scaling and bias
+        logits = cosine_sim * logit_scale + logit_bias
 
         # Apply sigmoid to get probabilities
-        # sigmoid(x) = 1 / (1 + exp(-x))
         probs = 1.0 / (1.0 + np.exp(-logits))
 
         return probs.flatten()
