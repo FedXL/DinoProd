@@ -148,7 +148,7 @@ class ClassifierService:
             )
 
         # Additional safety check (only if using pre-computed embeddings)
-        if hasattr(self, 'category_embeddings') and not self.category_embeddings:
+        if self.use_precomputed_embeddings and not self.category_embeddings:
             return ClassificationResult(
                 category="",
                 confidence=0.0,
