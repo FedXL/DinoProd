@@ -161,6 +161,10 @@ class SigLIPModel:
         # Apply SigLIP's learned scaling and bias
         logits = cosine_sim * logit_scale + logit_bias
 
+        # Debug logging
+        fastapi_logger.debug(f"Cosine similarities: {cosine_sim.flatten()}")
+        fastapi_logger.debug(f"After scaling (scale={logit_scale:.4f}, bias={logit_bias:.4f}): {logits.flatten()}")
+
         # Apply sigmoid to get probabilities
         probs = 1.0 / (1.0 + np.exp(-logits))
 
@@ -204,6 +208,10 @@ class SigLIPModel:
             # SigLIP uses sigmoid, not softmax, because it's trained with sigmoid loss
             logits_per_image = outputs.logits_per_image
             probs = torch.sigmoid(logits_per_image)
+
+            # Debug logging
+            fastapi_logger.debug(f"Raw logits from model: {logits_per_image.cpu().numpy().flatten()}")
+            fastapi_logger.debug(f"After sigmoid: {probs.cpu().numpy().flatten()}")
 
             # Return as numpy array
             return probs.cpu().numpy().flatten()
