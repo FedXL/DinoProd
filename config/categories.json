@@ -16,14 +16,14 @@
     "photo of a sketch"
   ], 
   "other": [
-    
-    "a photo of a cat",
-    "a photo of a dog",
-    "a photo of a bird",
-    "a photo of a fish",
-    "a photo of a horse",
-    "a photo of a car",
-    "a photo of a truck",
-    "a photo of a motorcycle"
+
+    "not a painting",
+    "not a building",
+    "not a photo of a painting",
+    "not a photo of a building",
+    "not a painting of a person",
+    "not a painting of a building",
+    "not a artistic work",
+    "not a photo of a sketch"
   ]
 }
