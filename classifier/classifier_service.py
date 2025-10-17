@@ -42,11 +42,15 @@ class ClassifierService:
         self.category_prompts: Dict[str, List[str]] = {}
         self.category_embeddings: Dict[str, np.ndarray] = {}
 
+        # Flag to control whether to use pre-computed embeddings or joint processing
+        # Pre-computed is faster but joint processing may be more accurate
+        self.use_precomputed_embeddings = True
+
         self._initialized = False
     
     async def initialize(self):
         """
-        Initialize the classifier service by loading model and pre-computing category embeddings.
+        Initialize the classifier service by loading model and optionally pre-computing category embeddings.
         This should be called once at startup.
         """
         if self._initialized:
@@ -69,7 +73,7 @@ class ClassifierService:
             fastapi_logger.error(error_msg)
             raise RuntimeError(error_msg) from e
 
-        # Pre-compute text embeddings for all category prompts
+        # Load category prompts
         try:
             self.category_prompts = self.config.categories.copy()
 
@@ -77,35 +81,41 @@ class ClassifierService:
                 raise ValueError("No categories found in configuration")
 
             total_prompts = sum(len(prompts) for prompts in self.category_prompts.values())
-            fastapi_logger.info(f"Pre-computing embeddings for {total_prompts} text prompts across {len(self.category_prompts)} categories...")
 
-            # Encode all prompts and store by category
-            category_embeddings = {}
-            for category, prompts in self.category_prompts.items():
-                embeddings = self.model.encode_text(prompts)
+            if self.use_precomputed_embeddings:
+                fastapi_logger.info(f"Pre-computing embeddings for {total_prompts} text prompts across {len(self.category_prompts)} categories...")
+                fastapi_logger.info("Using pre-computed embeddings with sigmoid similarity (un-normalized embeddings + dot product + sigmoid)")
 
-                # Validate embeddings
-                if embeddings is None or len(embeddings) == 0:
-                    raise ValueError(f"Failed to encode text prompts for category '{category}'")
-                if len(embeddings) != len(prompts):
-                    raise ValueError(f"Mismatch in embeddings for category '{category}': expected {len(prompts)}, got {len(embeddings)}")
+                # Encode all prompts and store by category
+                category_embeddings = {}
+                for category, prompts in self.category_prompts.items():
+                    embeddings = self.model.encode_text(prompts)
 
-                # Debug: log embedding statistics
-                for i, (prompt, emb) in enumerate(zip(prompts, embeddings)):
-                    emb_norm = float(np.linalg.norm(emb))
-                    emb_mean = float(np.mean(emb))
-                    fastapi_logger.debug(f"  Text embedding [{i}] '{prompt}': norm={emb_norm:.4f}, mean={emb_mean:.4f}")
+                    # Validate embeddings
+                    if embeddings is None or len(embeddings) == 0:
+                        raise ValueError(f"Failed to encode text prompts for category '{category}'")
+                    if len(embeddings) != len(prompts):
+                        raise ValueError(f"Mismatch in embeddings for category '{category}': expected {len(prompts)}, got {len(embeddings)}")
 
-                category_embeddings[category] = embeddings
-                fastapi_logger.info(f"Category '{category}': pre-computed {len(prompts)} text embeddings")
+                    # Debug: log embedding statistics
+                    for i, (prompt, emb) in enumerate(zip(prompts, embeddings)):
+                        emb_norm = float(np.linalg.norm(emb))
+                        emb_mean = float(np.mean(emb))
+                        fastapi_logger.debug(f"  Text embedding [{i}] '{prompt}': norm={emb_norm:.4f}, mean={emb_mean:.4f}")
 
-            if not category_embeddings:
-                raise ValueError("No category embeddings were created")
+                    category_embeddings[category] = embeddings
+                    fastapi_logger.info(f"Category '{category}': pre-computed {len(prompts)} text embeddings")
 
-            self.category_embeddings = category_embeddings
+                if not category_embeddings:
+                    raise ValueError("No category embeddings were created")
+
+                self.category_embeddings = category_embeddings
+            else:
+                fastapi_logger.info(f"Loaded {len(self.category_prompts)} categories with {total_prompts} total text prompts")
+                fastapi_logger.info("Using joint image-text processing (no pre-computed embeddings)")
 
         except Exception as e:
-            error_msg = f"Failed to pre-compute category embeddings: {str(e)}"
+            error_msg = f"Failed to initialize category data: {str(e)}"
             fastapi_logger.error(error_msg)
             raise RuntimeError(error_msg) from e
 
@@ -132,8 +142,8 @@ class ClassifierService:
                 error="Classifier service not initialized"
             )
 
-        # Additional safety check
-        if not self.category_embeddings:
+        # Additional safety check (only if using pre-computed embeddings)
+        if hasattr(self, 'category_embeddings') and not self.category_embeddings:
             return ClassificationResult(
                 category="",
                 confidence=0.0,
@@ -152,42 +162,64 @@ class ClassifierService:
                     error=error_msg
                 )
 
-            # Encode image
-            fastapi_logger.info("Computing image embedding...")
+            # Compute similarities
             start_time = time.perf_counter()
-            image_embedding = self.model.encode_image(image)
-            encoding_time = time.perf_counter() - start_time
-            fastapi_logger.info(f"Image encoded in {encoding_time:.3f} seconds")
-
-            # Debug: log embedding statistics
-            img_norm = float(np.linalg.norm(image_embedding))
-            img_mean = float(np.mean(image_embedding))
-            img_std = float(np.std(image_embedding))
-            img_min = float(np.min(image_embedding))
-            img_max = float(np.max(image_embedding))
-            fastapi_logger.debug(f"Image embedding stats: norm={img_norm:.4f}, mean={img_mean:.4f}, std={img_std:.4f}, min={img_min:.4f}, max={img_max:.4f}")
-
-            # Reshape once for all comparisons
-            img_emb = image_embedding.reshape(1, -1)
-
-            # Compute similarities with pre-computed category embeddings
             similarities = {}
-            for category, text_embeddings in self.category_embeddings.items():
-                # Compute similarity to ALL pre-computed text embeddings at once
-                similarity_scores = self.model.compute_similarity_from_embeddings(img_emb, text_embeddings)
 
-                # Debug logging: show individual prompt similarities
-                prompts = self.category_prompts[category]
-                fastapi_logger.debug(f"Category '{category}' prompt similarities:")
-                for i, (prompt, score) in enumerate(zip(prompts, similarity_scores)):
-                    fastapi_logger.debug(f"  [{i}] '{prompt}': {score:.4f}")
+            if self.use_precomputed_embeddings:
+                # Method 1: Pre-computed embeddings (faster)
+                fastapi_logger.info("Computing image embedding...")
+                image_embedding = self.model.encode_image(image)
+                encoding_time = time.perf_counter() - start_time
+                fastapi_logger.info(f"Image encoded in {encoding_time:.3f} seconds")
 
-                # Take the BEST (maximum) similarity for this category
-                max_score = float(np.max(similarity_scores))
-                max_idx = int(np.argmax(similarity_scores))
-                similarities[category] = max_score
+                # Debug: log embedding statistics
+                img_norm = float(np.linalg.norm(image_embedding))
+                img_mean = float(np.mean(image_embedding))
+                img_std = float(np.std(image_embedding))
+                img_min = float(np.min(image_embedding))
+                img_max = float(np.max(image_embedding))
+                fastapi_logger.debug(f"Image embedding stats: norm={img_norm:.4f}, mean={img_mean:.4f}, std={img_std:.4f}, min={img_min:.4f}, max={img_max:.4f}")
 
-                fastapi_logger.info(f"Category '{category}': best score = {max_score:.4f} (prompt: '{prompts[max_idx]}')")
+                # Reshape once for all comparisons
+                img_emb = image_embedding.reshape(1, -1)
+
+                # Compute similarities with pre-computed category embeddings
+                for category, text_embeddings in self.category_embeddings.items():
+                    # Compute similarity to ALL pre-computed text embeddings at once
+                    similarity_scores = self.model.compute_similarity_from_embeddings(img_emb, text_embeddings)
+
+                    # Debug logging: show individual prompt similarities
+                    prompts = self.category_prompts[category]
+                    fastapi_logger.debug(f"Category '{category}' prompt similarities:")
+                    for i, (prompt, score) in enumerate(zip(prompts, similarity_scores)):
+                        fastapi_logger.debug(f"  [{i}] '{prompt}': {score:.4f}")
+
+                    # Take the BEST (maximum) similarity for this category
+                    max_score = float(np.max(similarity_scores))
+                    max_idx = int(np.argmax(similarity_scores))
+                    similarities[category] = max_score
+
+                    fastapi_logger.info(f"Category '{category}': best score = {max_score:.4f} (prompt: '{prompts[max_idx]}')")
+            else:
+                # Method 2: Joint processing (potentially more accurate)
+                fastapi_logger.info("Computing similarities using joint image-text processing...")
+
+                for category, prompts in self.category_prompts.items():
+                    # Compute similarity to ALL text prompts for this category at once
+                    similarity_scores = self.model.compute_similarity(image, prompts)
+
+                    # Debug logging: show individual prompt similarities
+                    fastapi_logger.debug(f"Category '{category}' prompt similarities:")
+                    for i, (prompt, score) in enumerate(zip(prompts, similarity_scores)):
+                        fastapi_logger.debug(f"  [{i}] '{prompt}': {score:.4f}")
+
+                    # Take the BEST (maximum) similarity for this category
+                    max_score = float(np.max(similarity_scores))
+                    max_idx = int(np.argmax(similarity_scores))
+                    similarities[category] = max_score
+
+                    fastapi_logger.info(f"Category '{category}': best score = {max_score:.4f} (prompt: '{prompts[max_idx]}')")
 
             classification_time = time.perf_counter() - start_time
             fastapi_logger.info(f"Classification completed in {classification_time:.3f} seconds")
