@@ -44,7 +44,7 @@ class ClassifierService:
 
         # Flag to control whether to use pre-computed embeddings or joint processing
         # Pre-computed is faster but joint processing may be more accurate
-        self.use_precomputed_embeddings = False
+        self.use_precomputed_embeddings = True
 
         self._initialized = False
     
