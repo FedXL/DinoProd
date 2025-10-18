@@ -14,16 +14,5 @@
     "painting of a building",
     "artistic work",
     "photo of a sketch"
-  ], 
-  "other": [
-
-    "not a painting",
-    "not a building",
-    "not a photo of a painting",
-    "not a photo of a building",
-    "not a painting of a person",
-    "not a painting of a building",
-    "not a artistic work",
-    "not a photo of a sketch"
   ]
 }
