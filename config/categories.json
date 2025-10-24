@@ -4,15 +4,28 @@
     "building facade",
     "architectural photo",
     "exterior of a building",
-    "building photograph"
+    "building photograph"б
+    "sculpture",
+    "a photo of a sculpture",
+    "a photo of a statue",
+    "statue",
+    "monument",
+    "a photo of a monument",
+    "tower",
+    "a photo of a tower",
+    "skyscraper",
+    "a photo of a skyscraper",
+    "building complex",
+    "a photo of a building complex"
   ],
   "painting": [
     "a painting",
-    "artwork",
-    "photo of a painting",
+    "a photo of a painting",
+    "a painting in a museum",
+    "a painting in a gallery",
+    "a painting in a frame",
     "painting of a person",
     "painting of a building",
-    "artistic work",
     "photo of a sketch"
   ]
 }
