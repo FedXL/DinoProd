@@ -29,6 +29,9 @@ fastapi_logger = logging.getLogger(__name__)
 class EmbeddingRequest(BaseModel):
     url: str
 
+class BatchEmbeddingRequest(BaseModel):
+    urls: list[str]
+
 results = {}
 AUTH_TOKEN = os.getenv('TOKEN')
 embedding_service = EmbeddingService(URLImageLoader(), Dino3ExtractorV1())
@@ -94,6 +97,38 @@ async def extract_embedding(request: EmbeddingRequest):
     fastapi_logger.info(f"Embedding extraction completed in {elapsed:.2f}s")
 
     return {"embedding": embedding, "url": request.url}
+
+@app.post("/embedding/fast_extract_batch")
+async def extract_embeddings_batch(request: BatchEmbeddingRequest):
+    start = time.perf_counter()
+    fastapi_logger.info(f"Batch extraction request: {len(request.urls)} urls")
+
+    results = []
+    for url in request.urls:
+        try:
+            # ВАЖНО: sequential — без gather, без тасков
+            result = await run_in_threadpool(embedding_service.extract, url)
+            results.append({
+                "url": url,
+                "embedding": result.tolist(),
+                "error": None
+            })
+        except Exception as e:
+            fastapi_logger.error(f"Failed to extract: {url} error={e}")
+            results.append({
+                "url": url,
+                "embedding": None,
+                "error": str(e)
+            })
+    elapsed = time.perf_counter() - start
+    fastapi_logger.info(f"Batch extraction completed in {elapsed:.2f}s")
+
+    return {
+        "count": len(results),
+        "items": results,
+        "elapsed_sec": elapsed
+    }
+
 
 
 @app.get("/")
