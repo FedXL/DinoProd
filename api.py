@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import os
+from typing import List, Optional, Dict
+
 import requests
 import time
 from fastapi import FastAPI, HTTPException
@@ -29,8 +31,20 @@ fastapi_logger = logging.getLogger(__name__)
 class EmbeddingRequest(BaseModel):
     url: str
 
-class BatchEmbeddingRequest(BaseModel):
-    urls: list[str]
+class EmbeddingItem(BaseModel):
+    id: int
+    url: str
+
+class BatchEmbeddingRequestDict(BaseModel):
+    items: Dict[int, str]
+
+# Выходная модель: словарь id -> embedding
+class BatchEmbeddingResponseDict(BaseModel):
+    embeddings: Dict[int, Optional[list[float]]]
+    errors: Dict[int, str]
+    elapsed_sec: float
+
+
 
 results = {}
 AUTH_TOKEN = os.getenv('TOKEN')
@@ -98,37 +112,29 @@ async def extract_embedding(request: EmbeddingRequest):
 
     return {"embedding": embedding, "url": request.url}
 
-@app.post("/embedding/fast_extract_batch")
-async def extract_embeddings_batch(request: BatchEmbeddingRequest):
+@app.post("/embedding/fast_extract_batch", response_model=BatchEmbeddingResponseDict)
+async def extract_embeddings_dict(request: BatchEmbeddingRequestDict):
     start = time.perf_counter()
-    fastapi_logger.info(f"Batch extraction request: {len(request.urls)} urls")
 
-    results = []
-    for url in request.urls:
+    embeddings: Dict[int, Optional[list[float]]] = {}
+    errors: Dict[int, str] = {}
+
+    for id_, url in request.items.items():
         try:
-            # ВАЖНО: sequential — без gather, без тасков
-            result = await run_in_threadpool(embedding_service.extract, url)
-            results.append({
-                "url": url,
-                "embedding": result.tolist(),
-                "error": None
-            })
+            embedding = await run_in_threadpool(embedding_service.extract, url)
+            embeddings[id_] = embedding.tolist()
         except Exception as e:
-            fastapi_logger.error(f"Failed to extract: {url} error={e}")
-            results.append({
-                "url": url,
-                "embedding": None,
-                "error": str(e)
-            })
+            embeddings[id_] = None
+            errors[id_] = str(e)
+
     elapsed = time.perf_counter() - start
-    fastapi_logger.info(f"Batch extraction completed in {elapsed:.2f}s")
+    print(f"Batch embedding finished in {elapsed:.2f}s")
 
-    return {
-        "count": len(results),
-        "items": results,
-        "elapsed_sec": elapsed
-    }
-
+    return BatchEmbeddingResponseDict(
+        embeddings=embeddings,
+        errors=errors,
+        elapsed_sec=elapsed
+    )
 
 
 @app.get("/")
