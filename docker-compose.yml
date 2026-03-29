@@ -1,0 +1,19 @@
+services:
+  classifier:
+    build: .
+    container_name: ml-classifier
+    ports:
+      - "8000:8000"  # Внешний порт 8002, внутренний 8000
+    env_file:
+      - .env         # Прокинет твой TOKEN и LOG_LEVEL
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1       # Используем одну карту
+              capabilities: [gpu]
+    volumes:
+      - .:/app       # Опционально: для разработки (код будет обновляться внутри без пересборки)
+      - ~/.cache/huggingface:/root/.cache/huggingface # Кэшируем модели, чтобы не качать их каждый раз
+    restart: unless-stopped

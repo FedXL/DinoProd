@@ -1,5 +1,5 @@
 {
-  "building": [
+  "building":[
     "a photo of a building",
     "building facade",
     "architectural photo",
@@ -25,8 +25,15 @@
     "cathedral building",
     "religious building",
     "temple",
-    "a photo of a temple"
-  ],
+    "a photo of a temple",
+    "bridge",
+    "a photo of a bridge",
+    "bridge structure",
+    "suspension bridge",
+    "bridge span",
+    "overpass",
+    "viaduct"
+],
   "painting": [
     "a painting",
     "a photo of a painting",

@@ -1,0 +1,17 @@
+# Виртуальные окружения
+venv/
+venvexp/
+.venv/
+
+# Кэш Python
+**/__pycache__/
+*.pyc
+
+# Логи и временные файлы
+*.log
+.env
+.git/
+
+# Лишние файлы из твоей папки
+cuda-keyring_1.1-1_all.deb*
+backap/
