@@ -1,9 +1,7 @@
 services:
   classifier:
     build: .
-    container_name: ml-classifier
-    ports:
-      - "8000:8000"  # Внешний порт 8002, внутренний 8000
+    container_name: dino
     env_file:
       - .env         # Прокинет твой TOKEN и LOG_LEVEL
     deploy:
@@ -17,3 +15,9 @@ services:
       - .:/app       # Опционально: для разработки (код будет обновляться внутри без пересборки)
       - ~/.cache/huggingface:/root/.cache/huggingface # Кэшируем модели, чтобы не качать их каждый раз
     restart: unless-stopped
+    networks:
+      - artcracker-net
+
+networks:
+  artcracker-net:
+    external: true
