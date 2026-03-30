@@ -11,7 +11,7 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              count: 1       # Используем одну карту
+              count: 1
               capabilities: [gpu]
     volumes:
       - .:/app       # Опционально: для разработки (код будет обновляться внутри без пересборки)
