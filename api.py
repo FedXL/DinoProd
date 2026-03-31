@@ -91,20 +91,22 @@ async def lifespan(app: FastAPI):
     fastapi_logger.info("IP handler starting")
     try:
         ip = requests.get("https://api.ipify.org").text
-        response = requests.post(
-            "https://mb.artcracker.io/api/v1/update_embedding_api",
-            json={"ip": ip},
-            headers={
-                "Authorization": f"Token {AUTH_TOKEN}",
-                "Content-Type": "application/json",
-                "User-Agent": "embedding-service/1.0"
-            },
-            timeout=10
-        )
-        if response.status_code in (200, 201):
-            fastapi_logger.info(f"IP registered successfully: {ip}")
-        else:
-            fastapi_logger.warning(f"Failed to register IP: {response.status_code}, {response.text}")
+        print(f'ЗАГЛУШКА ПОКА НЕ ОТСЫЛАЕМ ЭТОГО айпи микросервиса {ip}')
+        # FIXME
+        # response = requests.post(
+        #     "https://mb.artcracker.io/api/v1/update_embedding_api",
+        #     json={"ip": ip},
+        #     headers={
+        #         "Authorization": f"Token {AUTH_TOKEN}",
+        #         "Content-Type": "application/json",
+        #         "User-Agent": "embedding-service/1.0"
+        #     },
+        #     timeout=10
+        # )
+        # if response.status_code in (200, 201):
+        #     fastapi_logger.info(f"IP registered successfully: {ip}")
+        # else:
+        #     fastapi_logger.warning(f"Failed to register IP: {response.status_code}, {response.text}")
     except Exception as e:
         fastapi_logger.error(f"Error registering IP: {str(e)}")
     
