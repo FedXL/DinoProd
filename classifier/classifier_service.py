@@ -2,6 +2,7 @@ import numpy as np
 from typing import Dict, List, Optional
 import logging
 import time
+from PIL import Image
 
 from .config import ClassifierConfig
 from .model import SigLIPModel
@@ -261,6 +262,34 @@ class ClassifierService:
                 error=error_msg
             )
     
+    def classify_image_from_pil(self, image: Image.Image) -> ClassificationResult:
+        if not self._initialized:
+            return ClassificationResult(category="", confidence=0.0, success=False, error="Classifier service not initialized")
+        if self.use_precomputed_embeddings and not self.category_embeddings:
+            return ClassificationResult(category="", confidence=0.0, success=False, error="No category embeddings available")
+        try:
+            similarities = {}
+            if self.use_precomputed_embeddings:
+                image_embedding = self.model.encode_image(image)
+                img_emb = image_embedding.reshape(1, -1)
+                for category, text_embeddings in self.category_embeddings.items():
+                    similarity_scores = self.model.compute_similarity_from_embeddings(img_emb, text_embeddings)
+                    similarities[category] = float(np.max(similarity_scores))
+            else:
+                for category, prompts in self.category_prompts.items():
+                    similarity_scores = self.model.compute_similarity(image, prompts)
+                    similarities[category] = float(np.max(similarity_scores))
+
+            best_category = max(similarities, key=similarities.get)
+            best_confidence = similarities[best_category]
+            result_category = best_category if best_confidence >= self.config.threshold else "other"
+            fastapi_logger.info(f"PIL classification: {result_category} ({best_confidence:.3f})")
+            return ClassificationResult(category=result_category, confidence=best_confidence, success=True)
+        except Exception as e:
+            error_msg = f"PIL classification failed: {str(e)}"
+            fastapi_logger.error(error_msg)
+            return ClassificationResult(category="", confidence=0.0, success=False, error=error_msg)
+
     def get_categories(self) -> List[str]:
         """Get list of available categories."""
         return list(self.config.categories.keys())

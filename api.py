@@ -5,7 +5,9 @@ import time
 from typing import List, Optional, Dict
 
 import requests
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
+from io import BytesIO
+from PIL import Image
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 from starlette.concurrency import run_in_threadpool
@@ -165,6 +167,39 @@ async def extract_embeddings_dict(request: BatchEmbeddingRequestDict):
     )
 
 # --- Endpoints: Classification ---
+
+@app.post("/embedding/classify_and_extract")
+async def classify_and_extract(file: UploadFile = File(...)):
+    image_bytes = await file.read()
+    try:
+        image = Image.open(BytesIO(image_bytes)).convert("RGB")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid image: {e}")
+
+    if not classifier_service._initialized:
+        raise HTTPException(status_code=503, detail="Classifier service not initialized")
+
+    start = time.perf_counter()
+
+    def _run_both():
+        clf = classifier_service.classify_image_from_pil(image)
+        emb = embedding_service.extract_from_pil(image)
+        return clf, emb
+
+    async with embedding_semaphore:
+        clf_result, embedding = await run_in_threadpool(_run_both)
+
+    elapsed = time.perf_counter() - start
+    fastapi_logger.info(f"classify_and_extract in {elapsed:.2f}s: {clf_result.category}")
+
+    return {
+        "success": clf_result.success,
+        "category": clf_result.category,
+        "confidence": clf_result.confidence,
+        "embedding": embedding.tolist() if clf_result.success else None,
+        "error": clf_result.error
+    }
+
 
 @app.post("/classifier/classify")
 async def classify_image(request: ClassifyRequest):

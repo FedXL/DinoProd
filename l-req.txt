@@ -11,6 +11,7 @@ click==8.2.1
 dotenv==0.9.9
 einops==0.8.1
 fastapi==0.116.1
+python-multipart==0.0.20
 filelock==3.20.0
 frozenlist==1.8.0
 fsspec==2025.9.0

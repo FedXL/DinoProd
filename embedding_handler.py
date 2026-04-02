@@ -506,3 +506,6 @@ class EmbeddingService:
             raise ValueError(message)
         return self.extractor.extract(image,**kwargs)
 
+    def extract_from_pil(self, image: Image.Image, **kwargs) -> np.ndarray:
+        return self.extractor.extract(image, **kwargs)
+
