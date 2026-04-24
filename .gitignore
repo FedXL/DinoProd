@@ -30,10 +30,10 @@ __pycache__/
 # Virtual Environment
 venv/
 venvexp/
-.env/
+
 .venv/
-env/
-ENV/
+
+
 .Python
 pip-log.txt
 
@@ -94,8 +94,8 @@ yarn-error.log*
 *.swp
 *.swo
 
-.gitignore
-.env
+
+
 ##########################
 # Images and generated media
 ##########################
@@ -124,4 +124,4 @@ yarn-error.log*
 # Custom rules (add below this line)
 ##########################
 .claude/settings.local.json
-.gitignore
+
